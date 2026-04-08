@@ -91,36 +91,48 @@ public class BoardView extends View {
         calculateTileSize();
     }
 
+    // Fixed reference footprint — every level uses the same tile size.
+    // Layouts are designed in LevelData to fit within these half-tile bounds.
+    // 18 half-units = 9 tiles wide, 26 half-units = 13 tiles tall.
+    private static final float REF_W_HALF = 18f;
+    private static final float REF_H_HALF = 26f;
+    private static final float MAX_LAYERS  = 8f;
+
     private void calculateTileSize() {
         if (board == null || getWidth() == 0 || getHeight() == 0) return;
 
+        layerShift = 4f;
+        float margin = 8f;
+        float maxLayerShift = MAX_LAYERS * layerShift;
+
+        // Fixed tile size: derived from reference footprint, NOT from current level extent.
+        // This guarantees identical tile size across every level.
+        float su = Math.min(
+            (getWidth()  - margin * 2 - maxLayerShift) / REF_W_HALF,
+            (getHeight() - margin * 2 - maxLayerShift) / REF_H_HALF
+        );
+        tileW = su * 2f;
+        tileH = su * 2f;
+
+        // Centre the actual extent of this level inside the canvas.
         int maxX = 0, maxY = 0, maxZ = 0;
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
         for (Tile t : board.tiles) {
             if (!t.removed) {
                 maxX = Math.max(maxX, t.x + 2);
                 maxY = Math.max(maxY, t.y + 2);
                 maxZ = Math.max(maxZ, t.z);
+                minX = Math.min(minX, t.x);
+                minY = Math.min(minY, t.y);
             }
         }
-        if (maxX == 0) { maxX = 20; maxY = 16; }
+        if (minX == Integer.MAX_VALUE) { minX = 0; minY = 0; }
 
-        layerShift = 4f;
         float totalShift = maxZ * layerShift;
-        float margin = 8f;
-
-        // su = half-tile size; board spans maxX half-units wide + layer shift
-        float su = Math.min(
-            (getWidth()  - margin * 2 - totalShift) / maxX,
-            (getHeight() - margin * 2 - totalShift) / maxY
-        );
-        tileW = su * 2f;
-        tileH = su * 2f;
-
-        // Board pixel bounds: left=0, right=maxX*su+totalShift; top=−totalShift, bottom=maxY*su
-        float boardPixW = maxX * su + totalShift;
-        float boardPixH = maxY * su + totalShift;
-        offsetX = (getWidth()  - boardPixW) / 2f;
-        offsetY = (getHeight() - boardPixH) / 2f + totalShift;
+        float boardPixW = (maxX - minX) * su + totalShift;
+        float boardPixH = (maxY - minY) * su + totalShift;
+        offsetX = (getWidth()  - boardPixW) / 2f - minX * su;
+        offsetY = (getHeight() - boardPixH) / 2f + totalShift - minY * su;
     }
 
     @Override
