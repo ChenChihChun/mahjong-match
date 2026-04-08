@@ -20,7 +20,7 @@ jobs:
         id: version
         run: |
           VERSION_NAME=$(grep 'versionName' app/build.gradle | sed 's/.*"\(.*\)".*/\1/')
-          VERSION_CODE=$(grep 'versionCode' app/build.gradle | grep -o '[0-9]*')
+          VERSION_CODE=$(grep 'versionCode' app/build.gradle | tr -d ' ' | sed 's/versionCode//')
           echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
 
