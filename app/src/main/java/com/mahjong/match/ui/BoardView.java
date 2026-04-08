@@ -213,6 +213,9 @@ public class BoardView extends View {
 
         for (Tile t : sorted) {
             if (t.removed) continue;
+            // Hide tiles that have a tile directly above — the one on top
+            // should completely cover them, no peek-through edges.
+            if (board.hasCoverAbove(t)) continue;
             boolean free = board.isFree(t);
 
             float px = offsetX + t.x * half + t.z * layerShift;
@@ -388,6 +391,7 @@ public class BoardView extends View {
 
         for (Tile t : sorted) {
             if (t.removed) continue;
+            if (board.hasCoverAbove(t)) continue;
             float px = offsetX + t.x * half + t.z * layerShift;
             float py = offsetY + t.y * vHalf - t.z * layerShift;
 

@@ -1,8 +1,10 @@
 package com.mahjong.match.game;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 
 /**
@@ -26,27 +28,15 @@ public class LevelData {
     public static final int H = 26; // 13 tiles tall
 
     public static int[][] getLayout(int level) {
-        // Floor difficulty: every level is at least as hard as a classic
-        // 144-tile 5-layer turtle. Lower levels still use ≥140 tiles and 4+
-        // layers; higher levels scale the footprint, layer count, and brick
-        // offsets from there.
         if (level == 100) return grandmaster();
-
-        int[][] base;
-        if      (level <= 15) base = rect(11, 7, 2, 2);   // 77 tiles
-        else if (level <= 30) base = rect(12, 7, 2, 1);   // 84
-        else if (level <= 45) base = rect(12, 8, 1, 1);   // 96
-        else if (level <= 60) base = rect(13, 8, 1, 0);   // 104
-        else                  base = rect(13, 9, 0, 0);   // 117
-
-        int layers = 4 + (level - 1) / 10;     // 4 → 13
+        // Every level is a deterministic randomised blob shape (unique per
+        // level number), stacked with organic upper layers. Floor difficulty
+        // stays above the classic 144-tile turtle.
+        int baseTarget = 78 + (level - 1);              // 78 → 176
+        if (baseTarget > 150) baseTarget = 150;
+        int layers = 4 + (level - 1) / 9;               // 4 → 15
         if (layers > 8) layers = 8;
-
-        // Sprinkle brick-offset layouts on harder levels for extra pain.
-        if (level >= 55 && level % 5 == 0) {
-            return brickStack(base, Math.min(layers, 5));
-        }
-        return stack(base, layers, 1);
+        return randomLayered(0xC0FFEEL ^ (long) level * 2654435761L, baseTarget, layers);
     }
 
     private static int[][] legacyLayout(int level) {
@@ -363,6 +353,93 @@ public class LevelData {
             }
         }
         return ensureEven(dedup(pos));
+    }
+
+    // ── Randomised blob generator ────────────────────────────────────────────
+
+    /**
+     * Grows a random connected blob of even-aligned tile cells starting at the
+     * board centre, until {@code target} tiles are placed or no frontier cells
+     * remain. Produces an organic irregular shape on layer 0.
+     */
+    private static List<long[]> randomBlob(Random r, int target) {
+        List<long[]> cells = new ArrayList<>();
+        Set<Long> placed = new HashSet<>();
+        int[][] dirs = {{-2,0},{2,0},{0,-2},{0,2}};
+
+        int cx = 8, cy = 12; // even-aligned centre
+        cells.add(new long[]{cy, cx});
+        placed.add((long) cy * 100 + cx);
+
+        List<int[]> frontier = new ArrayList<>();
+        for (int[] d : dirs) frontier.add(new int[]{cy + d[0], cx + d[1]});
+
+        while (cells.size() < target && !frontier.isEmpty()) {
+            // Weighted toward earlier entries → organic blob, not spider
+            int idx = r.nextInt(Math.min(frontier.size(), 6 + cells.size() / 3));
+            int[] pick = frontier.remove(idx);
+            int y = pick[0], x = pick[1];
+            if (x < 0 || y < 0 || x + 2 > W || y + 2 > H) continue;
+            long k = (long) y * 100 + x;
+            if (placed.contains(k)) continue;
+            placed.add(k);
+            cells.add(new long[]{y, x});
+            for (int[] d : dirs) {
+                int ny = y + d[0], nx = x + d[1];
+                long nk = (long) ny * 100 + nx;
+                if (!placed.contains(nk)) frontier.add(new int[]{ny, nx});
+            }
+        }
+        return cells;
+    }
+
+    /**
+     * Build a random blob base then stack organic upper layers. Each upper
+     * layer keeps only interior cells of the layer below (cells whose 4
+     * orthogonal neighbours all exist), then removes a random edge fraction.
+     */
+    private static int[][] randomLayered(long seed, int baseTarget, int maxLayers) {
+        Random r = new Random(seed);
+        List<long[]> base = randomBlob(r, baseTarget);
+
+        List<int[]> pos = new ArrayList<>();
+        Set<Long> prev = new HashSet<>();
+        for (long[] c : base) {
+            int y = (int) c[0], x = (int) c[1];
+            pos.add(new int[]{0, y, x});
+            prev.add((long) y * 100 + x);
+        }
+
+        for (int z = 1; z < maxLayers; z++) {
+            List<long[]> candidates = new ArrayList<>();
+            for (Long k : prev) {
+                int y = (int) (k / 100), x = (int) (k % 100);
+                if (prev.contains((long)(y - 2) * 100 + x)
+                 && prev.contains((long)(y + 2) * 100 + x)
+                 && prev.contains((long) y * 100 + (x - 2))
+                 && prev.contains((long) y * 100 + (x + 2))) {
+                    candidates.add(new long[]{y, x});
+                }
+            }
+            if (candidates.size() < 4) break;
+            Collections.shuffle(candidates, r);
+
+            // Keep most of the interior on low layers, fewer on high layers.
+            double keepFrac = Math.max(0.35, 0.90 - z * 0.08);
+            int keep = Math.max(4, (int) Math.round(candidates.size() * keepFrac));
+            keep = Math.min(keep, candidates.size());
+
+            Set<Long> next = new HashSet<>();
+            for (int i = 0; i < keep; i++) {
+                long[] c = candidates.get(i);
+                int y = (int) c[0], x = (int) c[1];
+                next.add((long) y * 100 + x);
+                pos.add(new int[]{z, y, x});
+            }
+            prev = next;
+            if (prev.isEmpty()) break;
+        }
+        return ensureEven(pos);
     }
 
     // ── Grandmaster (level 100) ──────────────────────────────────────────────

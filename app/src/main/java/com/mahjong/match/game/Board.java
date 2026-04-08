@@ -179,6 +179,9 @@ public class Board {
         return !blockedLeft || !blockedRight;
     }
 
+    /** Public version of {@link #isCovered} so the renderer can hide obscured tiles. */
+    public boolean hasCoverAbove(Tile a) { return isCovered(a); }
+
     // Tile B covers tile A if: B.z == A.z+1 AND |B.x - A.x| <= 1 AND |B.y - A.y| <= 1
     private boolean isCovered(Tile a) {
         for (Tile b : tiles) {
