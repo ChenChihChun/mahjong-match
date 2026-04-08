@@ -26,6 +26,30 @@ public class LevelData {
     public static final int H = 26; // 13 tiles tall
 
     public static int[][] getLayout(int level) {
+        // Floor difficulty: every level is at least as hard as a classic
+        // 144-tile 5-layer turtle. Lower levels still use ≥140 tiles and 4+
+        // layers; higher levels scale the footprint, layer count, and brick
+        // offsets from there.
+        if (level == 100) return grandmaster();
+
+        int[][] base;
+        if      (level <= 15) base = rect(11, 7, 2, 2);   // 77 tiles
+        else if (level <= 30) base = rect(12, 7, 2, 1);   // 84
+        else if (level <= 45) base = rect(12, 8, 1, 1);   // 96
+        else if (level <= 60) base = rect(13, 8, 1, 0);   // 104
+        else                  base = rect(13, 9, 0, 0);   // 117
+
+        int layers = 4 + (level - 1) / 10;     // 4 → 13
+        if (layers > 8) layers = 8;
+
+        // Sprinkle brick-offset layouts on harder levels for extra pain.
+        if (level >= 55 && level % 5 == 0) {
+            return brickStack(base, Math.min(layers, 5));
+        }
+        return stack(base, layers, 1);
+    }
+
+    private static int[][] legacyLayout(int level) {
         switch (level) {
             // ── EASY (1-20): single layer, sparse → moderate density ───────
             case 1:  return rect(2, 2, 7, 11);             // 4 tiles
@@ -147,9 +171,9 @@ public class LevelData {
     }
 
     public static String getDifficultyLabel(int level) {
-        if (level <= 20)  return "簡單";
-        if (level <= 50)  return "中等";
-        if (level <= 80)  return "困難";
+        if (level <= 20)  return "普通";
+        if (level <= 50)  return "困難";
+        if (level <= 80)  return "專家";
         return "大師";
     }
 
