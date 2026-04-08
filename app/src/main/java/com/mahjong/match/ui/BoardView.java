@@ -45,6 +45,8 @@ public class BoardView extends View {
     private TileClickListener listener;
 
     private final Map<Integer, Bitmap> tileBitmaps = new HashMap<>();
+    private final Bitmap[] flowerBitmaps = new Bitmap[4];
+    private final Bitmap[] seasonBitmaps = new Bitmap[4];
     private final Paint bmpPaint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
 
     public BoardView(Context context) {
@@ -115,6 +117,12 @@ public class BoardView extends View {
         for (int[] pair : map) {
             Bitmap b = BitmapFactory.decodeResource(ctx.getResources(), pair[1], opts);
             if (b != null) tileBitmaps.put(pair[0], b);
+        }
+        int[] fl = {R.drawable.tile_f_mei, R.drawable.tile_f_lan, R.drawable.tile_f_ju, R.drawable.tile_f_zhu};
+        int[] se = {R.drawable.tile_s_spring, R.drawable.tile_s_summer, R.drawable.tile_s_autumn, R.drawable.tile_s_winter};
+        for (int i = 0; i < 4; i++) {
+            flowerBitmaps[i] = BitmapFactory.decodeResource(ctx.getResources(), fl[i], opts);
+            seasonBitmaps[i] = BitmapFactory.decodeResource(ctx.getResources(), se[i], opts);
         }
     }
 
@@ -254,6 +262,8 @@ public class BoardView extends View {
         float cy = py + tileH / 2f;
 
         Bitmap bmp = tileBitmaps.get(t.type);
+        if (bmp == null && t.type == Tile.TYPE_FLOWER) bmp = flowerBitmaps[t.subType % 4];
+        if (bmp == null && t.type == Tile.TYPE_SEASON) bmp = seasonBitmaps[t.subType % 4];
         if (bmp != null) {
             float inset = tileW * 0.10f;
             RectF dst = new RectF(px + inset, py + inset, px + tileW - inset, py + tileH - inset);
