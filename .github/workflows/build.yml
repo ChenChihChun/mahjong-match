@@ -37,6 +37,18 @@ jobs:
           mkdir -p ~/.android
           echo "$DEBUG_KEYSTORE" | base64 -d > ~/.android/debug.keystore
 
+      - name: Verify keystore SHA-1
+        run: |
+          SHA1=$(keytool -list -v -keystore ~/.android/debug.keystore \
+            -alias androiddebugkey -storepass android 2>/dev/null \
+            | grep -E "SHA1:" | head -1 | sed 's/.*: //')
+          echo "Keystore SHA-1: $SHA1"
+          echo "### Signing Info" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Key | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SHA-1 | \`${SHA1}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Package | com.mahjong.match |" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
