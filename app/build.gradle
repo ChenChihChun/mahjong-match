@@ -44,6 +44,17 @@ android {
     }
 }
 
+// Fix duplicate Kotlin stdlib classes when using AGP 8.x
+// kotlin-stdlib 1.8+ bundles jdk7/jdk8 extensions, so force them to the same version
+configurations.all {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'org.jetbrains.kotlin' &&
+                (details.requested.name == 'kotlin-stdlib-jdk7' ||
+                 details.requested.name == 'kotlin-stdlib-jdk8')) {
+            details.useVersion '1.8.22'
+        }
+    }
+}
 
 dependencies {
     implementation 'androidx.core:core:1.12.0'
