@@ -1,20 +1,26 @@
 package com.mahjong.match.ui;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.view.MotionEvent;
 import android.view.View;
 
+import com.mahjong.match.R;
 import com.mahjong.match.game.Board;
 import com.mahjong.match.game.Tile;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class BoardView extends View {
 
@@ -38,9 +44,13 @@ public class BoardView extends View {
     public interface TileClickListener { void onTileClicked(Tile tile); }
     private TileClickListener listener;
 
+    private final Map<Integer, Bitmap> tileBitmaps = new HashMap<>();
+    private final Paint bmpPaint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
+
     public BoardView(Context context) {
         super(context);
         initPaints();
+        loadTileBitmaps(context);
         setOnTouchListener((v, e) -> {
             if (e.getAction() == MotionEvent.ACTION_UP) handleTouch(e.getX(), e.getY());
             return true;
@@ -75,6 +85,37 @@ public class BoardView extends View {
 
         fallPaint.setTextAlign(Paint.Align.CENTER);
         fallPaint.setFakeBoldText(true);
+    }
+
+    private void loadTileBitmaps(Context ctx) {
+        int[][] map = {
+            {Tile.TYPE_CHAR_1, R.drawable.tile_1m}, {Tile.TYPE_CHAR_2, R.drawable.tile_2m},
+            {Tile.TYPE_CHAR_3, R.drawable.tile_3m}, {Tile.TYPE_CHAR_4, R.drawable.tile_4m},
+            {Tile.TYPE_CHAR_5, R.drawable.tile_5m}, {Tile.TYPE_CHAR_6, R.drawable.tile_6m},
+            {Tile.TYPE_CHAR_7, R.drawable.tile_7m}, {Tile.TYPE_CHAR_8, R.drawable.tile_8m},
+            {Tile.TYPE_CHAR_9, R.drawable.tile_9m},
+            {Tile.TYPE_BAMB_1, R.drawable.tile_1s}, {Tile.TYPE_BAMB_2, R.drawable.tile_2s},
+            {Tile.TYPE_BAMB_3, R.drawable.tile_3s}, {Tile.TYPE_BAMB_4, R.drawable.tile_4s},
+            {Tile.TYPE_BAMB_5, R.drawable.tile_5s}, {Tile.TYPE_BAMB_6, R.drawable.tile_6s},
+            {Tile.TYPE_BAMB_7, R.drawable.tile_7s}, {Tile.TYPE_BAMB_8, R.drawable.tile_8s},
+            {Tile.TYPE_BAMB_9, R.drawable.tile_9s},
+            {Tile.TYPE_CIRC_1, R.drawable.tile_1p}, {Tile.TYPE_CIRC_2, R.drawable.tile_2p},
+            {Tile.TYPE_CIRC_3, R.drawable.tile_3p}, {Tile.TYPE_CIRC_4, R.drawable.tile_4p},
+            {Tile.TYPE_CIRC_5, R.drawable.tile_5p}, {Tile.TYPE_CIRC_6, R.drawable.tile_6p},
+            {Tile.TYPE_CIRC_7, R.drawable.tile_7p}, {Tile.TYPE_CIRC_8, R.drawable.tile_8p},
+            {Tile.TYPE_CIRC_9, R.drawable.tile_9p},
+            {Tile.TYPE_WIND_E, R.drawable.tile_1z}, {Tile.TYPE_WIND_S, R.drawable.tile_2z},
+            {Tile.TYPE_WIND_W, R.drawable.tile_3z}, {Tile.TYPE_WIND_N, R.drawable.tile_4z},
+            {Tile.TYPE_DRAG_B, R.drawable.tile_5z}, // 白
+            {Tile.TYPE_DRAG_F, R.drawable.tile_6z}, // 發
+            {Tile.TYPE_DRAG_Z, R.drawable.tile_7z}, // 中
+        };
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inPreferredConfig = Bitmap.Config.ARGB_8888;
+        for (int[] pair : map) {
+            Bitmap b = BitmapFactory.decodeResource(ctx.getResources(), pair[1], opts);
+            if (b != null) tileBitmaps.put(pair[0], b);
+        }
     }
 
     public void setBoard(Board board) {
@@ -211,6 +252,30 @@ public class BoardView extends View {
     private void drawTileContent(Canvas canvas, Tile t, float px, float py, boolean free) {
         float cx = px + tileW / 2f;
         float cy = py + tileH / 2f;
+
+        Bitmap bmp = tileBitmaps.get(t.type);
+        if (bmp != null) {
+            float inset = tileW * 0.10f;
+            RectF dst = new RectF(px + inset, py + inset, px + tileW - inset, py + tileH - inset);
+            // Preserve aspect ratio (mahjim tiles are taller than wide).
+            float bw = bmp.getWidth(), bh = bmp.getHeight();
+            float dw = dst.width(), dh = dst.height();
+            float scale = Math.min(dw / bw, dh / bh);
+            float w = bw * scale, h = bh * scale;
+            float left = dst.centerX() - w / 2f;
+            float top  = dst.centerY() - h / 2f;
+            RectF fitted = new RectF(left, top, left + w, top + h);
+            bmpPaint.setAlpha(free ? 255 : 165);
+            canvas.drawBitmap(bmp, null, fitted, bmpPaint);
+            if (!free && !t.selected && !t.highlighted) {
+                Paint dim = new Paint();
+                dim.setColor(0x33000000);
+                dim.setStyle(Paint.Style.FILL);
+                float r = tileW * 0.1f;
+                canvas.drawRoundRect(new RectF(px, py, px+tileW, py+tileH), r, r, dim);
+            }
+            return;
+        }
 
         // Draw the tile label ourselves with bold coloured text + drop shadow
         // for a uniform 3-D look across every tile (Unicode mahjong glyphs
