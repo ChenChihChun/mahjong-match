@@ -2,7 +2,6 @@ package com.mahjong.match;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.Button;
@@ -16,6 +15,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Clean up old APKs from previous update
+        UpdateChecker.cleanOldApks(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -72,14 +74,12 @@ public class MainActivity extends AppCompatActivity {
 
         // Play button
         Button playBtn = makeButton("▶  開始遊戲", 0xFF0F3460, 0xFFFFD700);
-        playBtn.setOnClickListener(v -> {
-            startActivity(new Intent(this, LevelSelectActivity.class));
-        });
+        playBtn.setOnClickListener(v -> startActivity(new Intent(this, LevelSelectActivity.class)));
         root.addView(playBtn);
 
         addSpacer(root, 16);
 
-        // Continue button (if in progress)
+        // Continue button
         int lastLevel = prefs.getInt("last_level", 1);
         if (maxLevel > 0) {
             Button contBtn = makeButton("↩  繼續 第" + lastLevel + "關", 0xFF0A2A4A, 0xFF00D4FF);
@@ -92,16 +92,42 @@ public class MainActivity extends AppCompatActivity {
             addSpacer(root, 16);
         }
 
+        // Update button
+        Button updateBtn = makeButton("⬆  檢查更新", 0xFF1A1A3A, 0xFF888888);
+        updateBtn.setOnClickListener(v -> {
+            updateBtn.setText("⬆  檢查中...");
+            updateBtn.setEnabled(false);
+            UpdateChecker.checkForUpdate(this, (hasUpdate, latestVer, latestCode, url, notes, error) -> {
+                updateBtn.setText("⬆  檢查更新");
+                updateBtn.setEnabled(true);
+                if (error != null) {
+                    android.widget.Toast.makeText(this, "檢查失敗: " + error, android.widget.Toast.LENGTH_SHORT).show();
+                } else if (hasUpdate) {
+                    UpdateChecker.showUpdateDialog(this, latestVer, latestCode, url, notes);
+                } else {
+                    UpdateChecker.showNoUpdateDialog(this);
+                }
+            });
+        });
+        root.addView(updateBtn);
+
         // Version
+        addSpacer(root, 24);
         TextView ver = new TextView(this);
-        ver.setText("v1.0  ·  100 關");
+        ver.setText("v" + UpdateChecker.getCurrentVersionName(this) + "  ·  100 關");
         ver.setTextSize(12);
         ver.setTextColor(0xFF555577);
         ver.setGravity(Gravity.CENTER);
-        ver.setPadding(0, 40, 0, 0);
         root.addView(ver);
 
         setContentView(root);
+
+        // Auto-check for updates silently on startup
+        UpdateChecker.checkForUpdate(this, (hasUpdate, latestVer, latestCode, url, notes, error) -> {
+            if (hasUpdate) {
+                UpdateChecker.showUpdateDialog(this, latestVer, latestCode, url, notes);
+            }
+        });
     }
 
     private Button makeButton(String text, int bg, int fg) {
@@ -113,7 +139,6 @@ public class MainActivity extends AppCompatActivity {
         btn.setPadding(0, 24, 0, 24);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, 0, 0);
         btn.setLayoutParams(lp);
         return btn;
     }
