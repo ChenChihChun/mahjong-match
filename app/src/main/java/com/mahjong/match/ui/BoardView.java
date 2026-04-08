@@ -212,21 +212,40 @@ public class BoardView extends View {
         float cx = px + tileW / 2f;
         float cy = py + tileH / 2f;
 
-        String emoji = t.getEmoji();
-        // Unicode mahjong glyphs leave a lot of internal padding inside their
-        // em-square, so the rendered figure is much smaller than the text size.
-        // Oversize the text so the glyph itself fills the tile face.
-        float emojiSize = tileH * 1.55f;
-        emojiPaint.setTextSize(emojiSize);
-
-        // Try to draw emoji; it will render as the Unicode mahjong tile on supported devices
+        // Draw the tile label ourselves with bold coloured text + drop shadow
+        // for a uniform 3-D look across every tile (Unicode mahjong glyphs
+        // render inconsistently — only U+1F004 中 is in the emoji set on most
+        // Android fonts; the rest are plain outline characters).
+        String label = t.getFallbackLabel();
+        int color = t.getSuitColor();
         float alpha = free ? 1f : 0.65f;
-        emojiPaint.setAlpha((int)(255 * alpha));
+        int alphaInt = (int) (255 * alpha);
 
-        // Draw emoji centered
-        Paint.FontMetrics fm = emojiPaint.getFontMetrics();
-        float textY = cy - (fm.ascent + fm.descent) / 2f;
-        canvas.drawText(emoji, cx, textY, emojiPaint);
+        emojiPaint.setColor(color);
+        emojiPaint.setAlpha(alphaInt);
+        emojiPaint.setFakeBoldText(true);
+        emojiPaint.setShadowLayer(tileW * 0.06f, 1.5f, 2f, 0x55000000);
+
+        if (label.length() <= 1) {
+            // Single huge character (中, 發, 白, 東, 南, 西, 北, 梅, 春, …)
+            emojiPaint.setTextSize(tileH * 0.78f);
+            Paint.FontMetrics fm = emojiPaint.getFontMetrics();
+            float textY = cy - (fm.ascent + fm.descent) / 2f;
+            canvas.drawText(label, cx, textY, emojiPaint);
+        } else {
+            // Two characters (e.g. 一萬, 1竹, 1餅) — stack them vertically so
+            // each glyph stays large instead of squishing side-by-side.
+            emojiPaint.setTextSize(tileH * 0.52f);
+            Paint.FontMetrics fm = emojiPaint.getFontMetrics();
+            float lineH = fm.descent - fm.ascent;
+            float baselineOffset = -(fm.ascent + fm.descent) / 2f;
+            float topY = cy - lineH * 0.32f + baselineOffset;
+            float botY = cy + lineH * 0.32f + baselineOffset;
+            canvas.drawText(label.substring(0, 1), cx, topY, emojiPaint);
+            canvas.drawText(label.substring(1), cx, botY, emojiPaint);
+        }
+
+        emojiPaint.clearShadowLayer();
 
         // Covered overlay dim
         if (!free && !t.selected && !t.highlighted) {
