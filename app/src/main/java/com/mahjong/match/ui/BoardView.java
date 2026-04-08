@@ -3,8 +3,10 @@ package com.mahjong.match.ui;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.graphics.Shader;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -12,7 +14,6 @@ import com.mahjong.match.game.Board;
 import com.mahjong.match.game.Tile;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public class BoardView extends View {
@@ -20,58 +21,60 @@ public class BoardView extends View {
     private Board board;
     private float tileW, tileH;
     private float offsetX, offsetY;
-    private float shadowOffset;
+    private float layerShift;
 
-    private Paint tilePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint shadowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint subTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint selectedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint hintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint freePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    // Paints
+    private final Paint bgPaint      = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint shadowPaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint tilePaint    = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint coveredPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint edgePaint    = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint borderPaint  = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint selPaint     = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint hintPaint    = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint emojiPaint   = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint fallPaint    = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    public interface TileClickListener {
-        void onTileClicked(Tile tile);
-    }
+    public interface TileClickListener { void onTileClicked(Tile tile); }
     private TileClickListener listener;
 
     public BoardView(Context context) {
         super(context);
         initPaints();
         setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_UP) {
-                handleTouch(e.getX(), e.getY());
-            }
+            if (e.getAction() == MotionEvent.ACTION_UP) handleTouch(e.getX(), e.getY());
             return true;
         });
     }
 
     private void initPaints() {
-        shadowPaint.setColor(0x66000000);
+        shadowPaint.setColor(0x55000000);
         shadowPaint.setStyle(Paint.Style.FILL);
 
         tilePaint.setStyle(Paint.Style.FILL);
+        coveredPaint.setStyle(Paint.Style.FILL);
+        coveredPaint.setColor(0xFFD4C49A);
+
+        // 3D edge highlight (top/left lighter, bottom/right darker)
+        edgePaint.setStyle(Paint.Style.FILL);
 
         borderPaint.setStyle(Paint.Style.STROKE);
-        borderPaint.setStrokeWidth(1.5f);
-        borderPaint.setColor(0xFF888888);
+        borderPaint.setStrokeWidth(1f);
+        borderPaint.setColor(0xFF9A8060);
 
-        textPaint.setTextAlign(Paint.Align.CENTER);
-        textPaint.setFakeBoldText(true);
-
-        subTextPaint.setTextAlign(Paint.Align.CENTER);
-
-        selectedPaint.setStyle(Paint.Style.STROKE);
-        selectedPaint.setStrokeWidth(3f);
-        selectedPaint.setColor(0xFFFFD700);
+        selPaint.setStyle(Paint.Style.STROKE);
+        selPaint.setStrokeWidth(4f);
+        selPaint.setColor(0xFFFFD700);
 
         hintPaint.setStyle(Paint.Style.STROKE);
-        hintPaint.setStrokeWidth(3f);
+        hintPaint.setStrokeWidth(4f);
         hintPaint.setColor(0xFF00FF88);
 
-        freePaint.setStyle(Paint.Style.FILL);
-        freePaint.setColor(0xFFF5F0E8);
+        emojiPaint.setTextAlign(Paint.Align.CENTER);
+        emojiPaint.setColor(Color.BLACK);
+
+        fallPaint.setTextAlign(Paint.Align.CENTER);
+        fallPaint.setFakeBoldText(true);
     }
 
     public void setBoard(Board board) {
@@ -89,32 +92,34 @@ public class BoardView extends View {
     }
 
     private void calculateTileSize() {
-        if (board == null || getWidth() == 0) return;
+        if (board == null || getWidth() == 0 || getHeight() == 0) return;
 
         int maxX = 0, maxY = 0, maxZ = 0;
         for (Tile t : board.tiles) {
-            maxX = Math.max(maxX, t.x + 2);
-            maxY = Math.max(maxY, t.y + 2);
-            maxZ = Math.max(maxZ, t.z);
+            if (!t.removed) {
+                maxX = Math.max(maxX, t.x + 2);
+                maxY = Math.max(maxY, t.y + 2);
+                maxZ = Math.max(maxZ, t.z);
+            }
         }
+        if (maxX == 0) { maxX = 20; maxY = 16; }
 
-        float shadow = maxZ * 3;
-        float availW = getWidth() * 0.95f - shadow;
-        float availH = getHeight() * 0.95f - shadow;
+        layerShift = 4f;
+        float totalShift = maxZ * layerShift;
+        float margin = 8f;
+        float availW = getWidth()  - margin * 2 - totalShift;
+        float availH = getHeight() - margin * 2 - totalShift;
 
-        // Each tile is 2 half-units wide/tall
-        float scaleX = availW / (maxX + 1);
-        float scaleY = availH / (maxY + 1);
-        float halfUnit = Math.min(scaleX, scaleY);
+        // half-unit size
+        float su = Math.min(availW / (maxX + 1), availH / (maxY + 1));
+        tileW = su * 2f;
+        tileH = su * 2f;
 
-        tileW = halfUnit * 2;
-        tileH = halfUnit * 2;
-        shadowOffset = 3f;
-
-        float boardW = maxX * halfUnit + tileW + shadow;
-        float boardH = maxY * halfUnit + tileH + shadow;
-        offsetX = (getWidth() - boardW) / 2f;
-        offsetY = (getHeight() - boardH) / 2f;
+        // Centre the board
+        float boardPxW = maxX * su + tileW + totalShift;
+        float boardPxH = maxY * su + tileH + totalShift;
+        offsetX = (getWidth()  - boardPxW) / 2f + margin;
+        offsetY = (getHeight() - boardPxH) / 2f + margin;
     }
 
     @Override
@@ -124,7 +129,9 @@ public class BoardView extends View {
 
         canvas.drawColor(0xFF1A1A2E);
 
-        // Sort tiles: draw bottom layers first, then higher layers (painter's algorithm)
+        float half = tileW / 2f;
+
+        // Sort: lower layers first, then top-to-bottom, left-to-right
         List<Tile> sorted = new ArrayList<>(board.tiles);
         sorted.sort((a, b) -> {
             if (a.z != b.z) return Integer.compare(a.z, b.z);
@@ -132,74 +139,86 @@ public class BoardView extends View {
             return Integer.compare(a.x, b.x);
         });
 
-        float half = tileW / 2f;
-
         for (Tile t : sorted) {
             if (t.removed) continue;
-
-            float px = offsetX + t.x * half;
-            float py = offsetY + t.y * half;
-            float sx = px + t.z * shadowOffset;
-            float sy = py + t.z * shadowOffset;
-
-            // Shadow
-            canvas.drawRoundRect(new RectF(sx+2, sy+2, sx+tileW+2, sy+tileH+2), 4, 4, shadowPaint);
-
-            // Tile background
             boolean free = board.isFree(t);
-            if (t.selected) {
-                tilePaint.setColor(0xFFFFEE99);
-            } else if (t.highlighted) {
-                tilePaint.setColor(0xFFCCFFCC);
-            } else if (free) {
-                tilePaint.setColor(0xFFF5F0E8);
-            } else {
-                tilePaint.setColor(0xFFCCBB99); // covered = darker
-            }
-            canvas.drawRoundRect(new RectF(sx, sy, sx+tileW, sy+tileH), 5, 5, tilePaint);
 
-            // Border
-            if (t.selected) {
-                canvas.drawRoundRect(new RectF(sx, sy, sx+tileW, sy+tileH), 5, 5, selectedPaint);
-            } else if (t.highlighted) {
-                canvas.drawRoundRect(new RectF(sx, sy, sx+tileW, sy+tileH), 5, 5, hintPaint);
-            } else {
-                canvas.drawRoundRect(new RectF(sx, sy, sx+tileW, sy+tileH), 5, 5, borderPaint);
-            }
+            float px = offsetX + t.x * half + t.z * layerShift;
+            float py = offsetY + t.y * half - t.z * layerShift; // layers go up visually
 
-            // Tile face
-            drawTileLabel(canvas, t, sx, sy);
+            drawTile(canvas, t, px, py, free);
         }
     }
 
-    private void drawTileLabel(Canvas canvas, Tile t, float x, float y) {
-        String label = t.getLabel();
-        int color = t.getLabelColor();
-        if (!board.isFree(t)) color = 0xFF999999; // dim if not free
+    private void drawTile(Canvas canvas, Tile t, float px, float py, boolean free) {
+        RectF rect = new RectF(px, py, px + tileW, py + tileH);
+        float r = tileW * 0.1f; // corner radius
 
-        float cx = x + tileW / 2f;
-        float cy = y + tileH / 2f;
+        // Drop shadow
+        shadowPaint.setMaskFilter(null);
+        canvas.drawRoundRect(new RectF(px+3, py+4, px+tileW+3, py+tileH+4), r, r, shadowPaint);
 
-        if (label.contains("\n")) {
-            // Two-line label (e.g. "一\n萬")
-            String[] parts = label.split("\n");
-            float fontSize = tileH * 0.3f;
-            textPaint.setTextSize(fontSize);
-            textPaint.setColor(color);
-            canvas.drawText(parts[0], cx, cy - fontSize * 0.1f, textPaint);
-            subTextPaint.setTextSize(fontSize * 0.75f);
-            subTextPaint.setColor(color);
-            subTextPaint.setTextAlign(Paint.Align.CENTER);
-            canvas.drawText(parts[1], cx, cy + fontSize * 0.85f, subTextPaint);
+        // Tile body
+        if (t.selected) {
+            tilePaint.setColor(0xFFFFF0A0);
+        } else if (t.highlighted) {
+            tilePaint.setColor(0xFFE0FFE0);
+        } else if (free) {
+            tilePaint.setColor(0xFFF5EDD6); // ivory
         } else {
-            float fontSize = tileH * 0.42f;
-            // Circle tiles: slightly smaller
-            if (label.length() == 1 && label.charAt(0) >= '①' && label.charAt(0) <= '⑨') {
-                fontSize = tileH * 0.50f;
-            }
-            textPaint.setTextSize(fontSize);
-            textPaint.setColor(color);
-            canvas.drawText(label, cx, cy + fontSize * 0.35f, textPaint);
+            tilePaint.setColor(0xFFD4C49A); // darker ivory when covered
+        }
+        canvas.drawRoundRect(rect, r, r, tilePaint);
+
+        // 3D bevel: top+left light edge
+        Paint lightEdge = new Paint(Paint.ANTI_ALIAS_FLAG);
+        lightEdge.setColor(free ? 0xFFFFFFCC : 0xFFE8D8B0);
+        lightEdge.setStyle(Paint.Style.STROKE);
+        lightEdge.setStrokeWidth(tileW * 0.04f);
+        canvas.drawLine(px+r, py+2, px+tileW-r, py+2, lightEdge); // top
+        canvas.drawLine(px+2, py+r, px+2, py+tileH-r, lightEdge); // left
+
+        // Bottom+right dark edge
+        Paint darkEdge = new Paint(Paint.ANTI_ALIAS_FLAG);
+        darkEdge.setColor(0xFF8B6E3A);
+        darkEdge.setStyle(Paint.Style.STROKE);
+        darkEdge.setStrokeWidth(tileW * 0.04f);
+        canvas.drawLine(px+r, py+tileH-2, px+tileW-r, py+tileH-2, darkEdge); // bottom
+        canvas.drawLine(px+tileW-2, py+r, px+tileW-2, py+tileH-r, darkEdge); // right
+
+        // Border
+        borderPaint.setColor(t.selected ? 0xFFFFD700 : t.highlighted ? 0xFF00CC66 : 0xFF9A8060);
+        borderPaint.setStrokeWidth(t.selected || t.highlighted ? 3.5f : 1f);
+        canvas.drawRoundRect(rect, r, r, borderPaint);
+
+        // Tile content: emoji or fallback
+        drawTileContent(canvas, t, px, py, free);
+    }
+
+    private void drawTileContent(Canvas canvas, Tile t, float px, float py, boolean free) {
+        float cx = px + tileW / 2f;
+        float cy = py + tileH / 2f;
+
+        String emoji = t.getEmoji();
+        float emojiSize = tileH * 0.62f;
+        emojiPaint.setTextSize(emojiSize);
+
+        // Try to draw emoji; it will render as the Unicode mahjong tile on supported devices
+        float alpha = free ? 1f : 0.65f;
+        emojiPaint.setAlpha((int)(255 * alpha));
+
+        // Draw emoji centered
+        Paint.FontMetrics fm = emojiPaint.getFontMetrics();
+        float textY = cy - (fm.ascent + fm.descent) / 2f;
+        canvas.drawText(emoji, cx, textY, emojiPaint);
+
+        // Covered overlay dim
+        if (!free && !t.selected && !t.highlighted) {
+            Paint dim = new Paint();
+            dim.setColor(0x33000000);
+            dim.setStyle(Paint.Style.FILL);
+            float r = tileW * 0.1f;
+            canvas.drawRoundRect(new RectF(px, py, px+tileW, py+tileH), r, r, dim);
         }
     }
 
@@ -208,15 +227,14 @@ public class BoardView extends View {
 
         float half = tileW / 2f;
 
-        // Check from top layer down
+        // Check top layers first
         List<Tile> sorted = new ArrayList<>(board.tiles);
         sorted.sort((a, b) -> Integer.compare(b.z, a.z));
 
         for (Tile t : sorted) {
             if (t.removed) continue;
-
-            float px = offsetX + t.x * half + t.z * shadowOffset;
-            float py = offsetY + t.y * half + t.z * shadowOffset;
+            float px = offsetX + t.x * half + t.z * layerShift;
+            float py = offsetY + t.y * half - t.z * layerShift;
 
             if (touchX >= px && touchX <= px + tileW &&
                 touchY >= py && touchY <= py + tileH) {
