@@ -107,19 +107,20 @@ public class BoardView extends View {
         layerShift = 4f;
         float totalShift = maxZ * layerShift;
         float margin = 8f;
-        float availW = getWidth()  - margin * 2 - totalShift;
-        float availH = getHeight() - margin * 2 - totalShift;
 
-        // half-unit size
-        float su = Math.min(availW / (maxX + 1), availH / (maxY + 1));
+        // su = half-tile size; board spans maxX half-units wide + layer shift
+        float su = Math.min(
+            (getWidth()  - margin * 2 - totalShift) / maxX,
+            (getHeight() - margin * 2 - totalShift) / maxY
+        );
         tileW = su * 2f;
         tileH = su * 2f;
 
-        // Centre the board
-        float boardPxW = maxX * su + tileW + totalShift;
-        float boardPxH = maxY * su + tileH + totalShift;
-        offsetX = (getWidth()  - boardPxW) / 2f + margin;
-        offsetY = (getHeight() - boardPxH) / 2f + margin;
+        // Board pixel bounds: left=0, right=maxX*su+totalShift; top=−totalShift, bottom=maxY*su
+        float boardPixW = maxX * su + totalShift;
+        float boardPixH = maxY * su + totalShift;
+        offsetX = (getWidth()  - boardPixW) / 2f;
+        offsetY = (getHeight() - boardPixH) / 2f + totalShift;
     }
 
     @Override
@@ -200,7 +201,7 @@ public class BoardView extends View {
         float cy = py + tileH / 2f;
 
         String emoji = t.getEmoji();
-        float emojiSize = tileH * 0.62f;
+        float emojiSize = tileH * 0.85f;
         emojiPaint.setTextSize(emojiSize);
 
         // Try to draw emoji; it will render as the Unicode mahjong tile on supported devices
