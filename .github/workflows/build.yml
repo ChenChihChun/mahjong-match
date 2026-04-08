@@ -1,0 +1,66 @@
+name: Mahjong Match Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version info
+        id: version
+        run: |
+          VERSION_NAME=$(grep 'versionName' app/build.gradle | sed 's/.*"\(.*\)".*/\1/')
+          VERSION_CODE=$(grep 'versionCode' app/build.gradle | grep -o '[0-9]*')
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Restore debug keystore
+        env:
+          DEBUG_KEYSTORE: ${{ secrets.DEBUG_KEYSTORE }}
+        run: |
+          mkdir -p ~/.android
+          echo "$DEBUG_KEYSTORE" | base64 -d > ~/.android/debug.keystore
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.4'
+
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mahjong-match-v${{ steps.version.outputs.name }}-build${{ github.run_number }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.name }}-c${{ steps.version.outputs.code }}
+          name: 麻將消消樂 v${{ steps.version.outputs.name }}
+          body: |
+            Version v${{ steps.version.outputs.name }} (code ${{ steps.version.outputs.code }})
+            Build #${{ github.run_number }}
+          files: app/build/outputs/apk/debug/app-debug.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
