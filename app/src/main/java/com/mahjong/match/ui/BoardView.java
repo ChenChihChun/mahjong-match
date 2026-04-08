@@ -213,7 +213,10 @@ public class BoardView extends View {
         float cy = py + tileH / 2f;
 
         String emoji = t.getEmoji();
-        float emojiSize = tileH * 0.85f;
+        // Unicode mahjong glyphs leave a lot of internal padding inside their
+        // em-square, so the rendered figure is much smaller than the text size.
+        // Oversize the text so the glyph itself fills the tile face.
+        float emojiSize = tileH * 1.55f;
         emojiPaint.setTextSize(emojiSize);
 
         // Try to draw emoji; it will render as the Unicode mahjong tile on supported devices
