@@ -147,21 +147,28 @@ public class BoardView extends View {
     private static final float REF_H_HALF = 26f;
     private static final float MAX_LAYERS  = 8f;
 
+    // Tiles are drawn taller than the grid cell (matching real mahjong tile
+    // proportion ~70:100) and extend below & right of their footprint, creating
+    // overlap/3-D stacking. Aspect ratio and overflow budget must stay in sync.
+    private static final float TILE_ASPECT = 1.40f;       // H / W
+    private static final float H_OVERFLOW_CELLS = 0.40f;  // half-units borrowed at bottom
+    private static final float SIDE_DEPTH_FRAC  = 0.12f;  // thickness of tile side, relative to faceW
+
     private void calculateTileSize() {
         if (board == null || getWidth() == 0 || getHeight() == 0) return;
 
-        layerShift = 4f;
+        layerShift = 5f;
         float margin = 8f;
         float maxLayerShift = MAX_LAYERS * layerShift;
 
-        // Fixed tile size: derived from reference footprint, NOT from current level extent.
-        // This guarantees identical tile size across every level.
+        // Derive half-unit pixel size so that the taller faces + overflow all fit.
+        // Width budget unchanged. Height budget must fit (REF_H_HALF + overflow).
         float su = Math.min(
             (getWidth()  - margin * 2 - maxLayerShift) / REF_W_HALF,
-            (getHeight() - margin * 2 - maxLayerShift) / REF_H_HALF
+            (getHeight() - margin * 2 - maxLayerShift) / (REF_H_HALF + H_OVERFLOW_CELLS * 2)
         );
         tileW = su * 2f;
-        tileH = su * 2f;
+        tileH = tileW * TILE_ASPECT;
 
         // Centre the actual extent of this level inside the canvas.
         int maxX = 0, maxY = 0, maxZ = 0;
@@ -206,54 +213,89 @@ public class BoardView extends View {
             boolean free = board.isFree(t);
 
             float px = offsetX + t.x * half + t.z * layerShift;
-            float py = offsetY + t.y * half - t.z * layerShift; // layers go up visually
+            float py = offsetY + t.y * half - t.z * layerShift - faceTopOverflow();
 
             drawTile(canvas, t, px, py, free);
         }
     }
 
+    private float faceTopOverflow() {
+        // Face is taller than cell: centre the face vertically on the cell.
+        float cell = tileW;
+        return (tileH - cell) * 0.5f;
+    }
+
     private void drawTile(Canvas canvas, Tile t, float px, float py, boolean free) {
-        RectF rect = new RectF(px, py, px + tileW, py + tileH);
-        float r = tileW * 0.1f; // corner radius
+        float r = tileW * 0.12f; // corner radius
+        float depth = tileW * SIDE_DEPTH_FRAC;
 
-        // Drop shadow
-        shadowPaint.setMaskFilter(null);
-        canvas.drawRoundRect(new RectF(px+3, py+4, px+tileW+3, py+tileH+4), r, r, shadowPaint);
+        // Drop shadow (soft, offset down-right)
+        shadowPaint.setColor(0x66000000);
+        canvas.drawRoundRect(
+            new RectF(px + depth*0.6f, py + depth*1.2f,
+                      px + tileW + depth*1.4f, py + tileH + depth*1.4f),
+            r, r, shadowPaint);
 
-        // Tile body
+        // Side / thickness: a larger rounded rect behind the face, offset down-right.
+        // This is what gives the Shanghai-mahjong "block" look.
+        Paint sidePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        sidePaint.setStyle(Paint.Style.FILL);
+        sidePaint.setColor(0xFFB89566); // warm beige side
+        canvas.drawRoundRect(
+            new RectF(px + depth, py + depth,
+                      px + tileW + depth, py + tileH + depth),
+            r, r, sidePaint);
+
+        // Face rect (the flat top of the tile)
+        RectF face = new RectF(px, py, px + tileW, py + tileH);
+
+        // Face fill — vertical gradient for subtle sheen
+        int topCol, botCol;
         if (t.selected) {
-            tilePaint.setColor(0xFFFFF0A0);
+            topCol = 0xFFFFF4B0; botCol = 0xFFEFD66A;
         } else if (t.highlighted) {
-            tilePaint.setColor(0xFFE0FFE0);
+            topCol = 0xFFE8FFE0; botCol = 0xFFB0E8A8;
         } else if (free) {
-            tilePaint.setColor(0xFFF5EDD6); // ivory
+            topCol = 0xFFFFF8E4; botCol = 0xFFE8D9AE;
         } else {
-            tilePaint.setColor(0xFFD4C49A); // darker ivory when covered
+            topCol = 0xFFE6D7AC; botCol = 0xFFC2AC78;
         }
-        canvas.drawRoundRect(rect, r, r, tilePaint);
+        tilePaint.setShader(new LinearGradient(px, py, px, py + tileH,
+            topCol, botCol, Shader.TileMode.CLAMP));
+        canvas.drawRoundRect(face, r, r, tilePaint);
+        tilePaint.setShader(null);
 
-        // 3D bevel: top+left light edge
+        // Inner highlight ring (bevel)
+        float inset = Math.max(1.5f, tileW * 0.025f);
+        RectF innerRect = new RectF(px + inset, py + inset,
+                                    px + tileW - inset, py + tileH - inset);
         Paint lightEdge = new Paint(Paint.ANTI_ALIAS_FLAG);
-        lightEdge.setColor(free ? 0xFFFFFFCC : 0xFFE8D8B0);
+        lightEdge.setColor(0xFFFFFFFF);
         lightEdge.setStyle(Paint.Style.STROKE);
-        lightEdge.setStrokeWidth(tileW * 0.04f);
-        canvas.drawLine(px+r, py+2, px+tileW-r, py+2, lightEdge); // top
-        canvas.drawLine(px+2, py+r, px+2, py+tileH-r, lightEdge); // left
+        lightEdge.setStrokeWidth(tileW * 0.05f);
+        lightEdge.setAlpha(140);
+        canvas.drawLine(innerRect.left + r*0.5f, innerRect.top,
+                        innerRect.right - r*0.5f, innerRect.top, lightEdge);
+        canvas.drawLine(innerRect.left, innerRect.top + r*0.5f,
+                        innerRect.left, innerRect.bottom - r*0.5f, lightEdge);
 
-        // Bottom+right dark edge
         Paint darkEdge = new Paint(Paint.ANTI_ALIAS_FLAG);
-        darkEdge.setColor(0xFF8B6E3A);
+        darkEdge.setColor(0xFF7A5E2A);
         darkEdge.setStyle(Paint.Style.STROKE);
-        darkEdge.setStrokeWidth(tileW * 0.04f);
-        canvas.drawLine(px+r, py+tileH-2, px+tileW-r, py+tileH-2, darkEdge); // bottom
-        canvas.drawLine(px+tileW-2, py+r, px+tileW-2, py+tileH-r, darkEdge); // right
+        darkEdge.setStrokeWidth(tileW * 0.05f);
+        darkEdge.setAlpha(120);
+        canvas.drawLine(innerRect.left + r*0.5f, innerRect.bottom,
+                        innerRect.right - r*0.5f, innerRect.bottom, darkEdge);
+        canvas.drawLine(innerRect.right, innerRect.top + r*0.5f,
+                        innerRect.right, innerRect.bottom - r*0.5f, darkEdge);
 
-        // Border
-        borderPaint.setColor(t.selected ? 0xFFFFD700 : t.highlighted ? 0xFF00CC66 : 0xFF9A8060);
-        borderPaint.setStrokeWidth(t.selected || t.highlighted ? 3.5f : 1f);
-        canvas.drawRoundRect(rect, r, r, borderPaint);
+        // Outer border (selection / hint accent)
+        borderPaint.setColor(t.selected ? 0xFFFFD700
+                            : t.highlighted ? 0xFF00CC66
+                            : 0xFF8A6A3A);
+        borderPaint.setStrokeWidth(t.selected || t.highlighted ? tileW * 0.05f : 1.2f);
+        canvas.drawRoundRect(face, r, r, borderPaint);
 
-        // Tile content: emoji or fallback
         drawTileContent(canvas, t, px, py, free);
     }
 
@@ -265,8 +307,9 @@ public class BoardView extends View {
         if (bmp == null && t.type == Tile.TYPE_FLOWER) bmp = flowerBitmaps[t.subType % 4];
         if (bmp == null && t.type == Tile.TYPE_SEASON) bmp = seasonBitmaps[t.subType % 4];
         if (bmp != null) {
-            float inset = tileW * 0.10f;
-            RectF dst = new RectF(px + inset, py + inset, px + tileW - inset, py + tileH - inset);
+            float insetX = tileW * 0.06f;
+            float insetY = tileH * 0.06f;
+            RectF dst = new RectF(px + insetX, py + insetY, px + tileW - insetX, py + tileH - insetY);
             // Preserve aspect ratio (mahjim tiles are taller than wide).
             float bw = bmp.getWidth(), bh = bmp.getHeight();
             float dw = dst.width(), dh = dst.height();
@@ -303,14 +346,14 @@ public class BoardView extends View {
 
         if (label.length() <= 1) {
             // Single huge character (中, 發, 白, 東, 南, 西, 北, 梅, 春, …)
-            emojiPaint.setTextSize(tileH * 0.78f);
+            emojiPaint.setTextSize(tileW * 0.80f);
             Paint.FontMetrics fm = emojiPaint.getFontMetrics();
             float textY = cy - (fm.ascent + fm.descent) / 2f;
             canvas.drawText(label, cx, textY, emojiPaint);
         } else {
             // Two characters (e.g. 一萬, 1竹, 1餅) — stack them vertically so
             // each glyph stays large instead of squishing side-by-side.
-            emojiPaint.setTextSize(tileH * 0.52f);
+            emojiPaint.setTextSize(tileW * 0.55f);
             Paint.FontMetrics fm = emojiPaint.getFontMetrics();
             float lineH = fm.descent - fm.ascent;
             float baselineOffset = -(fm.ascent + fm.descent) / 2f;
@@ -337,14 +380,19 @@ public class BoardView extends View {
 
         float half = tileW / 2f;
 
-        // Check top layers first
+        // Check top layers first; within same layer prefer the visually-front tile
+        // (larger y draws on top because faces overflow below their cell).
         List<Tile> sorted = new ArrayList<>(board.tiles);
-        sorted.sort((a, b) -> Integer.compare(b.z, a.z));
+        sorted.sort((a, b) -> {
+            if (a.z != b.z) return Integer.compare(b.z, a.z);
+            if (a.y != b.y) return Integer.compare(b.y, a.y);
+            return Integer.compare(b.x, a.x);
+        });
 
         for (Tile t : sorted) {
             if (t.removed) continue;
             float px = offsetX + t.x * half + t.z * layerShift;
-            float py = offsetY + t.y * half - t.z * layerShift;
+            float py = offsetY + t.y * half - t.z * layerShift - faceTopOverflow();
 
             if (touchX >= px && touchX <= px + tileW &&
                 touchY >= py && touchY <= py + tileH) {
