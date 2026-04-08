@@ -14,7 +14,6 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.mahjong.match.game.LevelData;
 
 public class LevelSelectActivity extends AppCompatActivity {
 
@@ -55,20 +54,20 @@ public class LevelSelectActivity extends AppCompatActivity {
         root.addView(header);
 
         // Difficulty sections
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(12), dp(12), dp(12), dp(24));
+        scrollView = new ScrollView(this);
+        contentLayout = new LinearLayout(this);
+        contentLayout.setOrientation(LinearLayout.VERTICAL);
+        contentLayout.setPadding(dp(12), dp(12), dp(12), dp(24));
 
-        addDifficultySection(content, "簡單  ⭐", 1, 20, unlockedLevel, prefs);
-        addDifficultySection(content, "中等  ⭐⭐", 21, 50, unlockedLevel, prefs);
-        addDifficultySection(content, "困難  ⭐⭐⭐", 51, 80, unlockedLevel, prefs);
-        addDifficultySection(content, "大師  ⭐⭐⭐⭐", 81, 100, unlockedLevel, prefs);
+        addDifficultySection(contentLayout, "簡單  ⭐", 1, 20, unlockedLevel, prefs);
+        addDifficultySection(contentLayout, "中等  ⭐⭐", 21, 50, unlockedLevel, prefs);
+        addDifficultySection(contentLayout, "困難  ⭐⭐⭐", 51, 80, unlockedLevel, prefs);
+        addDifficultySection(contentLayout, "大師  ⭐⭐⭐⭐", 81, 100, unlockedLevel, prefs);
 
-        scroll.addView(content);
+        scrollView.addView(contentLayout);
         LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
-        root.addView(scroll, scrollLp);
+        root.addView(scrollView, scrollLp);
 
         setContentView(root);
     }
@@ -133,8 +132,23 @@ public class LevelSelectActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // Recreate to refresh completion status
-        recreate();
+        // Rebuild UI to refresh completion status after returning from game
+        buildContent();
+    }
+
+    private ScrollView scrollView;
+    private LinearLayout contentLayout;
+
+    private void buildContent() {
+        if (contentLayout == null) return;
+        contentLayout.removeAllViews();
+        SharedPreferences prefs = getSharedPreferences("progress", MODE_PRIVATE);
+        int maxCompleted = prefs.getInt("max_level", 0);
+        int unlockedLevel = maxCompleted + 1;
+        addDifficultySection(contentLayout, "簡單  ⭐", 1, 20, unlockedLevel, prefs);
+        addDifficultySection(contentLayout, "中等  ⭐⭐", 21, 50, unlockedLevel, prefs);
+        addDifficultySection(contentLayout, "困難  ⭐⭐⭐", 51, 80, unlockedLevel, prefs);
+        addDifficultySection(contentLayout, "大師  ⭐⭐⭐⭐", 81, 100, unlockedLevel, prefs);
     }
 
     private int dp(int dp) {
