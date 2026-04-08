@@ -147,12 +147,14 @@ public class BoardView extends View {
     private static final float REF_H_HALF = 26f;
     private static final float MAX_LAYERS  = 8f;
 
-    // Tiles are drawn taller than the grid cell (matching real mahjong tile
-    // proportion ~70:100) and extend below & right of their footprint, creating
-    // overlap/3-D stacking. Aspect ratio and overflow budget must stay in sync.
+    // Tiles are drawn at real mahjong proportion (~70:100). To keep vertical
+    // neighbours from covering each other, the vertical grid step is stretched
+    // by TILE_ASPECT so rows are spaced by the full face height.
     private static final float TILE_ASPECT = 1.40f;       // H / W
-    private static final float H_OVERFLOW_CELLS = 0.40f;  // half-units borrowed at bottom
-    private static final float SIDE_DEPTH_FRAC  = 0.12f;  // thickness of tile side, relative to faceW
+    private static final float SIDE_DEPTH_FRAC  = 0.12f;  // thickness of tile side
+
+    // Extra pixels per half-unit in the Y direction (so rows don't overlap).
+    private float vHalf;
 
     private void calculateTileSize() {
         if (board == null || getWidth() == 0 || getHeight() == 0) return;
@@ -161,14 +163,15 @@ public class BoardView extends View {
         float margin = 8f;
         float maxLayerShift = MAX_LAYERS * layerShift;
 
-        // Derive half-unit pixel size so that the taller faces + overflow all fit.
-        // Width budget unchanged. Height budget must fit (REF_H_HALF + overflow).
+        // Horizontal budget: REF_W_HALF half-units.
+        // Vertical budget: REF_H_HALF half-units, each stretched by TILE_ASPECT.
         float su = Math.min(
             (getWidth()  - margin * 2 - maxLayerShift) / REF_W_HALF,
-            (getHeight() - margin * 2 - maxLayerShift) / (REF_H_HALF + H_OVERFLOW_CELLS * 2)
+            (getHeight() - margin * 2 - maxLayerShift) / (REF_H_HALF * TILE_ASPECT)
         );
         tileW = su * 2f;
         tileH = tileW * TILE_ASPECT;
+        vHalf = su * TILE_ASPECT;
 
         // Centre the actual extent of this level inside the canvas.
         int maxX = 0, maxY = 0, maxZ = 0;
@@ -186,9 +189,9 @@ public class BoardView extends View {
 
         float totalShift = maxZ * layerShift;
         float boardPixW = (maxX - minX) * su + totalShift;
-        float boardPixH = (maxY - minY) * su + totalShift;
+        float boardPixH = (maxY - minY) * vHalf + totalShift;
         offsetX = (getWidth()  - boardPixW) / 2f - minX * su;
-        offsetY = (getHeight() - boardPixH) / 2f + totalShift - minY * su;
+        offsetY = (getHeight() - boardPixH) / 2f + totalShift - minY * vHalf;
     }
 
     @Override
@@ -213,16 +216,10 @@ public class BoardView extends View {
             boolean free = board.isFree(t);
 
             float px = offsetX + t.x * half + t.z * layerShift;
-            float py = offsetY + t.y * half - t.z * layerShift - faceTopOverflow();
+            float py = offsetY + t.y * vHalf - t.z * layerShift;
 
             drawTile(canvas, t, px, py, free);
         }
-    }
-
-    private float faceTopOverflow() {
-        // Face is taller than cell: centre the face vertically on the cell.
-        float cell = tileW;
-        return (tileH - cell) * 0.5f;
     }
 
     private void drawTile(Canvas canvas, Tile t, float px, float py, boolean free) {
@@ -392,7 +389,7 @@ public class BoardView extends View {
         for (Tile t : sorted) {
             if (t.removed) continue;
             float px = offsetX + t.x * half + t.z * layerShift;
-            float py = offsetY + t.y * half - t.z * layerShift - faceTopOverflow();
+            float py = offsetY + t.y * vHalf - t.z * layerShift;
 
             if (touchX >= px && touchX <= px + tileW &&
                 touchY >= py && touchY <= py + tileH) {
