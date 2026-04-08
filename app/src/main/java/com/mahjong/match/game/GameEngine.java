@@ -119,25 +119,14 @@ public class GameEngine {
         board.clearSelection();
         selectedTile = null;
 
-        // Re-assign tile types among remaining non-removed tiles
         List<Tile> remaining = new java.util.ArrayList<>();
-        List<Integer> types = new java.util.ArrayList<>();
-        List<Integer> subs = new java.util.ArrayList<>();
         for (Tile t : board.tiles) {
-            if (!t.removed) {
-                remaining.add(t);
-                types.add(t.type);
-                subs.add(t.subType);
-            }
+            if (!t.removed) remaining.add(t);
         }
-        java.util.Collections.shuffle(types, new java.util.Random());
-        java.util.Collections.shuffle(subs, new java.util.Random());
-        // Re-pair: types must come in pairs for solvability
-        // Simple approach: re-shuffle in pairs
-        for (int i = 0; i < remaining.size(); i++) {
-            remaining.get(i).type = types.get(i);
-            remaining.get(i).subType = subs.get(i);
-        }
+        if (remaining.isEmpty()) return;
+
+        // Reshuffle remaining tiles in a solvable way
+        board.reshuffleSolvable(remaining, new java.util.Random());
         hintCount += 2; // penalty
     }
 
