@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>麻將消消樂</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+        }
+        #game-container {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+    <script src="js/Tile.js"></script>
+    <script src="js/LevelData.js"></script>
+    <script src="js/Board.js"></script>
+    <script src="js/GameEngine.js"></script>
+    <script src="js/scenes/MenuScene.js"></script>
+    <script src="js/scenes/LevelSelectScene.js"></script>
+    <script src="js/scenes/GameScene.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
